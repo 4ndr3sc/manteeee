@@ -15,6 +15,7 @@
                     <select id="role-select-{{ $u->id }}" class="bg-white text-sm rounded px-2 py-1 border">
                         <option value="user" {{ $u->role === 'user' ? 'selected' : '' }}>user</option>
                         <option value="admin" {{ $u->role === 'admin' ? 'selected' : '' }}>admin</option>
+                        <option value="client" {{ $u->role === 'client' ? 'selected' : '' }}>client</option>
                     </select>
                     <button onclick="setRoleAdmin({{ $u->id }})" class="px-3 py-1 bg-blue-600 text-white rounded">Actualizar</button>
                 </div>
@@ -35,14 +36,21 @@
             method: 'POST',
             headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
             body: JSON.stringify({role})
-        }).then(r => {
-            if (!r.ok) throw new Error('Error');
+        }).then(async r => {
+            if (!r.ok) {
+                let text = '';
+                try { text = await r.text(); } catch(_) { text = '' }
+                console.error('Error response', r.status, text);
+                let msg = 'No se pudo actualizar el rol';
+                try { const j = JSON.parse(text); if (j && j.message) msg = j.message; } catch(_) {}
+                throw new Error(`${r.status} - ${msg}`);
+            }
             return r.json();
         }).then(j => {
             const row = document.getElementById(`user-${userId}`);
             if (row) row.querySelector('[data-role]').innerText = j.user.role;
             alert('Rol actualizado');
-        }).catch(e => { console.error(e); alert('No se pudo actualizar'); });
+        }).catch(e => { console.error(e); alert(e.message || 'No se pudo actualizar'); });
     }
     </script>
 

@@ -74,9 +74,7 @@
             color: #0b3b71 !important; /* deep blue text */
             font-weight: 700;
         }
-        /* Force card selects to display only the selected option (avoid showing full option list inline) */
-        select.cardEstadoSelect option { display: none; }
-        select.cardEstadoSelect option:checked { display: block; }
+        /* Ensure card selects have a minimum width for layout */
         select.cardEstadoSelect { min-width: 140px; }
         aside .tab-btn { color: #0f172a; }
         /* Ensure interactive controls (buttons) remain blue and visible */
@@ -94,6 +92,36 @@
                 <span class="text-lg font-bold tracking-wider text-white">Maint<span class="text-blue-500">Flow</span></span>
             </div>
 
+            <!-- Modal para dejar comentario en OT -->
+            <div id="modalComentario" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden">
+                <div class="absolute inset-0 flex items-center justify-center p-4">
+                    <div class="w-full max-w-lg bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden">
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-850">
+                            <h3 class="text-white font-bold">Dejar Comentario</h3>
+                            <button onclick="closeComentarioModal()" class="text-gray-400 hover:text-white"><i class="fas fa-xmark"></i></button>
+                        </div>
+                        <div class="p-4">
+                            <div class="mb-3 text-sm text-gray-300">Equipo: <span id="comentEquipoNombre" class="font-bold text-white">---</span></div>
+                            <textarea id="comentarioTexto" rows="5" class="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-sm text-white" placeholder="Escribe tu comentario aquí..."></textarea>
+                            <div class="mt-3 flex items-center justify-end gap-2">
+                                <button onclick="closeComentarioModal()" class="px-4 py-2 bg-gray-700 text-gray-200 rounded-xl">Cancelar</button>
+                                <button onclick="submitComentario()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl">Enviar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if(auth()->check() && auth()->user()->hasRole('client'))
+            <nav class="p-4 space-y-1">
+                <button onclick="switchTab('cliente', this)" class="tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl bg-blue-600 text-white transition">
+                    <i class="fas fa-user-tag w-5 text-center"></i> Panel Cliente
+                </button>
+                <button onclick="switchTab('perfil', this)" class="tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition">
+                    <i class="fas fa-user-gear w-5 text-center"></i> Mi Perfil
+                </button>
+            </nav>
+            @else
             <nav class="p-4 space-y-1">
                 <button onclick="switchTab('inicio', this)" class="tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl bg-blue-600 text-white transition">
                     <i class="fas fa-chart-pie w-5 text-center"></i> Inicio / Central
@@ -101,9 +129,11 @@
                 <button onclick="switchTab('equipos', this)" class="tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition">
                     <i class="fas fa-industry w-5 text-center"></i> Equipos en Taller
                 </button>
+                @if(!(auth()->check() && auth()->user()->isAdmin()))
                 <button onclick="switchTab('ordenes', this)" class="tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition">
                     <i class="fas fa-list-check w-5 text-center"></i> Mis Órdenes (OT)
                 </button>
+                @endif
                 <button onclick="switchTab('historial', this)" class="tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition">
                     <i class="fas fa-clock-rotate-left w-5 text-center"></i> Historial / Trazabilidad
                 </button>
@@ -119,6 +149,7 @@
                 </button>
                 @endif
             </nav>
+            @endif
         </div>
 
         <div class="p-4 border-t border-gray-200">
@@ -210,7 +241,7 @@
                  <div class="bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-md flex flex-col justify-between"
                      data-id="eq-{{ $equipo->id }}" data-tipo="{{ $equipo->tipo }}" data-nombre="{{ $equipo->nombre }}"
                      data-marca="{{ $equipo->marca }}" data-serie="{{ $equipo->serie }}" data-estado="{{ $equipo->estado }}"
-                     data-falla="{{ $equipo->falla }}" data-responsable="{{ $equipo->user->name ?? $equipo->responsable ?? 'N/A' }}" data-user-id="{{ $equipo->user->id ?? '' }}">
+                     data-falla="{{ $equipo->falla }}" data-responsable="{{ $equipo->user->name ?? $equipo->responsable ?? 'N/A' }}" data-user-id="{{ $equipo->user->id ?? '' }}" data-cliente="{{ optional($equipo->cliente)->name ?? '' }}">
                     <div>
                         <div class="flex justify-between items-start mb-3">
                             <span class="px-2.5 py-0.5 text-xs font-semibold {{ $equipo->tipo === 'Correctivo' ? 'bg-red-950 text-red-400 border-red-900' : 'bg-green-950 text-green-400 border-green-900' }} border rounded-full">{{ $equipo->tipo }}</span>
@@ -233,6 +264,10 @@
                         <div class="mt-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700/50 flex items-center gap-2 text-xs text-gray-400">
                             <i class="fas fa-user text-blue-500"></i>
                             <span>Responsable: <strong>{{ $equipo->user->name ?? $equipo->responsable ?? 'Ing. Carlos Mendoza' }}</strong></span>
+                        </div>
+                        <div class="mt-2 bg-gray-900/40 p-2 rounded-lg border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
+                            <i class="fas fa-user-circle text-indigo-400"></i>
+                            <span>Cliente: <strong>{{ optional($equipo->cliente)->name ?? 'N/A' }}</strong></span>
                         </div>
                     </div>
                     <div class="mt-5 pt-3 border-t border-gray-700 text-xs text-gray-500 flex justify-between items-center">
@@ -301,6 +336,10 @@
             </div>
 
             <div id="modalDetail" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden overflow-hidden">
+                <!-- Botón de cierre flotante siempre accesible -->
+                <button id="modalCloseFloating" onclick="closeDetailModal()" class="flex items-center justify-center w-10 h-10 rounded-full bg-red-600 text-white fixed top-5 right-5 z-60 shadow-lg">
+                    <i class="fas fa-xmark"></i>
+                </button>
                 <div id="modalPanel" class="absolute right-0 top-0 bottom-0 bg-gray-800 border-l border-gray-700 w-full max-w-md transform translate-x-full transition-transform duration-300 shadow-2xl overflow-y-auto">
                     <div class="px-5 py-4 border-b border-gray-700 bg-gray-850 flex justify-between items-center sticky top-0">
                         <div class="flex items-center gap-2"><i class="fas fa-microchip text-blue-500 text-lg"></i><h3 class="text-base font-bold text-white">Ficha Técnica</h3></div>
@@ -316,6 +355,7 @@
                         <div class="grid grid-cols-2 gap-4 text-sm">
                             <div class="bg-gray-900/40 p-3 rounded-lg border border-gray-800"><span class="text-xs text-gray-500 block mb-0.5">Asignado A:</span><span id="detResponsable" class="font-semibold text-gray-200">---</span></div>
                             <div class="bg-gray-900/40 p-3 rounded-lg border border-gray-800"><span class="text-xs text-gray-500 block mb-0.5">Código OT</span><span id="detOT" class="font-mono font-semibold text-blue-400">---</span></div>
+                            <div class="bg-gray-900/40 p-3 rounded-lg border border-gray-800"><span class="text-xs text-gray-500 block mb-0.5">Cliente / Dueño</span><span id="detCliente" class="font-semibold text-gray-200">---</span></div>
                             <div class="bg-gray-900/40 p-3 rounded-lg border border-gray-800"><span class="text-xs text-gray-500 block mb-0.5">Teléfono Contacto</span><span id="detTelefono" class="font-semibold text-gray-200">---</span></div>
                             <div class="bg-gray-900/40 p-3 rounded-lg border border-gray-800"><span class="text-xs text-gray-500 block mb-0.5">Marca / Modelo</span><span id="detMarca" class="text-gray-200">---</span></div>
                             <div class="bg-gray-900/40 p-3 rounded-lg border border-gray-800"><span class="text-xs text-gray-500 block mb-0.5">Número de Serie</span><span id="detSerie" class="font-mono text-gray-200">---</span></div>
@@ -327,22 +367,9 @@
                                 <p id="detFalla">---</p>
                             </div>
                         </div>
+                        <!-- Estado se actualiza desde la tarjeta principal; la ficha es de solo lectura para estado -->
                         <div class="mt-4 bg-gray-900 p-4 rounded-xl border border-gray-700">
-                            <label class="block text-xs text-gray-400 mb-2">Estado del Equipo</label>
-                            <div class="flex gap-2">
-                                <select id="modalEstadoSelect" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white">
-                                    <option value="En espera">En espera</option>
-                                    <option value="En proceso">En proceso</option>
-                                    <option value="Arreglado">Arreglado</option>
-                                    <option value="Terminado">Terminado</option>
-                                    <option value="En espera de repuestos">En espera de repuestos</option>
-                                </select>
-                                <button onclick="cambiarEstadoDesdeModal(document.getElementById('modalEstadoSelect').value)" class="px-4 py-2 bg-blue-600 text-white rounded-xl">Actualizar</button>
-                            </div>
-                            <div class="mt-3">
-                                <label class="block text-xs text-gray-400 mb-1">Comentario (opcional)</label>
-                                <textarea id="modalComentario" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white" placeholder="Agrega un comentario para la bitácora"></textarea>
-                            </div>
+                            <p class="text-sm text-gray-400">El estado se actualiza desde la tarjeta en la lista. Usa "Ver detalles" para ver información completa.</p>
                         </div>
                         @if(auth()->user()->isAdmin())
                         <div class="bg-gray-900 p-4 rounded-xl border border-gray-700">
@@ -356,13 +383,13 @@
                     </div>
                     </div>
                     <div class="px-5 py-4 bg-gray-850 border-t border-gray-700 flex justify-end sticky bottom-0">
-                        <button onclick="closeDetailModal()" class="px-4 py-2 text-sm font-semibold text-gray-400 bg-gray-700/50 rounded-xl mr-2">Cancelar</button>
-                        <button onclick="cambiarEstadoDesdeModal(document.getElementById('modalEstadoSelect').value)" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl">Actualizar</button>
+                        <button onclick="closeDetailModal()" class="px-4 py-2 text-sm font-semibold text-gray-400 bg-gray-700/50 rounded-xl">Cerrar</button>
                     </div>
                 </div>
             </div>
         </div>
 
+        @if(!(auth()->check() && auth()->user()->isAdmin()))
         <div id="ordenes" class="tab-content space-y-6">
             <div>
                 <h1 class="text-3xl font-extrabold text-white">Órdenes de Trabajo (OT) Asignadas</h1>
@@ -373,8 +400,14 @@
                 <div id="mis-eq-{{ $me->id }}" data-id="eq-{{ $me->id }}" data-nombre="{{ $me->nombre }}" data-tipo="{{ $me->tipo }}" data-marca="{{ $me->marca }}" data-serie="{{ $me->serie }}" data-estado="{{ $me->estado }}" data-falla="{{ $me->falla }}" data-telefono="{{ $me->telefono }}" data-responsable="{{ $me->user->name ?? $me->responsable ?? 'N/A' }}" data-user-id="{{ $me->user->id ?? '' }}" class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-4">
                     <div>
                         <div class="flex justify-between items-center border-b border-gray-700 pb-3">
-                            <span class="text-xs font-mono font-bold text-blue-400 bg-gray-950 px-3 py-1 rounded-lg border border-gray-800">OT-{{ str_pad($me->id,3,'0',STR_PAD_LEFT) }}</span>
-                            <span class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-yellow-950/80 text-yellow-400 border border-yellow-900 rounded-full flex items-center gap-1.5">Estado: <strong id="status-{{ $me->id }}">{{ $me->estado }}</strong></span>
+                            <div class="flex flex-col">
+                                <span class="text-xs font-mono font-bold text-blue-400 bg-gray-950 px-3 py-1 rounded-lg border border-gray-800">OT-{{ str_pad($me->id,3,'0',STR_PAD_LEFT) }}</span>
+                                <span class="text-xs text-gray-400 mt-1">Cliente: <strong class="text-white">{{ optional($me->cliente)->name ?? 'N/A' }}</strong></span>
+                            </div>
+                            <div class="flex flex-col items-end">
+                                <span class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-yellow-950/80 text-yellow-400 border border-yellow-900 rounded-full flex items-center gap-1.5">Estado: <strong id="status-{{ $me->id }}">{{ $me->estado }}</strong></span>
+                                <span class="text-xs text-gray-400 mt-1">Responsable: <strong class="text-white">{{ $me->user->name ?? $me->responsable ?? 'N/A' }}</strong></span>
+                            </div>
                         </div>
 
                         <div class="mt-4">
@@ -383,16 +416,17 @@
                         </div>
                     </div>
 
-                    <div class="pt-4 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="pt-4 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div class="text-xs font-mono text-gray-400 flex items-center gap-1.5 bg-gray-900/60 px-3 py-1.5 rounded-lg border border-gray-700/50">
                             <i class="far fa-clock text-blue-500"></i> Asignado: <strong class="text-blue-400 font-bold">{{ $me->created_at->diffForHumans() }}</strong>
                         </div>
-                        <button onclick="verDetalles(this.closest('[data-id]'))" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2">Ver Ficha</button>
+                        <button onclick="openComentario(this.closest('[data-id]'))" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2">Dejar comentario</button>
                     </div>
                 </div>
                 @endforeach
             </div>
         </div>
+        @endif
 
         <div id="historial" class="tab-content space-y-6">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -437,12 +471,14 @@
             </div>
 
             <div id="modalBitacora" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-                <div class="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-700 bg-gray-850 flex justify-between items-center">
+                <div class="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-xl shadow-2xl max-h-[80vh] overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-700 bg-gray-850 flex justify-between items-center sticky top-0 z-20">
                         <h3 id="bitacoraEquipoNombre" class="text-base font-bold text-white">---</h3>
-                        <button onclick="closeBitacoraModal()" class="text-gray-400 hover:text-white"><i class="fas fa-xmark"></i></button>
+                        <button onclick="closeBitacoraModal()" class="text-gray-400 hover:text-white z-30"><i class="fas fa-xmark"></i></button>
                     </div>
-                    <div class="p-6"><div id="timelineContenedor" class="relative border-l border-gray-700 ml-3 space-y-4"></div></div>
+                    <div class="p-6 overflow-y-auto max-h-[65vh]">
+                        <div id="timelineContenedor" class="relative border-l border-gray-700 ml-3 space-y-4"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -497,38 +533,120 @@
 
                     <div class="w-full border-t border-gray-200 my-4 pt-4 text-left space-y-3 text-sm">
                         <div class="flex justify-between"><span class="text-gray-600">Correo:</span><span class="font-mono text-gray-800">{{ auth()->user()->email }}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-600">Departamento:</span><span class="text-gray-800">{{ auth()->user()->department ?? 'Mantenimiento' }}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-600">Turno:</span><span class="text-gray-800">{{ auth()->user()->shift ?? 'Rotativo' }}</span></div>
                     </div>
                 </div>
 
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 lg:col-span-2 space-y-6 shadow-md text-gray-900">
                     <h3 class="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2"><i class="fas fa-id-card text-blue-600 mr-2"></i> Datos del Puesto e Información Personal</h3>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div class="grid grid-cols-1 gap-4 text-sm">
                         <div><label class="block text-gray-700 text-xs uppercase font-bold mb-1">Correo Corporativo</label><input type="text" disabled value="{{ auth()->user()->email }}" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-gray-800"></div>
-                        <div><label class="block text-gray-700 text-xs uppercase font-bold mb-1">Área de Especialidad</label><input type="text" disabled value="{{ auth()->user()->specialty ?? 'General' }}" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-gray-800"></div>
-                    </div>
-
-                    <div>
-                        <label class="block text-gray-700 text-xs uppercase font-bold mb-2">Habilitaciones y Certificaciones Activas</label>
-                        <div class="flex flex-wrap gap-2">
-                            <span class="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2"><i class="fas fa-certificate text-amber-500"></i> {{ auth()->user()->cert1 ?? 'Certificación NFPA 70E' }}</span>
-                            <span class="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2"><i class="fas fa-shield text-emerald-500"></i> {{ auth()->user()->cert2 ?? 'Protocolo LOTO' }}</span>
-                        </div>
-                    </div>
-
-                    <div class="pt-2">
-                        <h4 class="text-sm font-bold text-gray-900 mb-3">Métricas de Desempeño Individual (Mes Actual)</h4>
-                        <div class="grid grid-cols-3 gap-4 text-center">
-                            <div class="bg-gray-50 p-3 rounded-xl border border-gray-200"><div class="text-xl font-black text-blue-600">18</div><div class="text-[10px] text-gray-600 mt-0.5">OTs Ejecutadas</div></div>
-                            <div class="bg-gray-50 p-3 rounded-xl border border-gray-200"><div class="text-xl font-black text-green-600">96%</div><div class="text-[10px] text-gray-600 mt-0.5">Tasa de Cierre</div></div>
-                            <div class="bg-gray-50 p-3 rounded-xl border border-gray-200"><div class="text-xl font-black text-purple-600">38 hrs</div><div class="text-[10px] text-gray-600 mt-0.5">Tiempo en Banco</div></div>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        @if(auth()->check() && auth()->user()->hasRole('client'))
+        <div id="cliente" class="tab-content space-y-6">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white">Panel Cliente</h1>
+                <p class="text-gray-400 text-sm mt-1">Accede a tus solicitudes, seguimiento en tiempo real, activos y métricas.</p>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="switchClienteTab('solicitudes', this)" class="cliente-tab-btn px-3 py-2 rounded-lg bg-blue-600 text-white">Solicitudes / PQR</button>
+                <button onclick="switchClienteTab('monitoreo', this)" class="cliente-tab-btn px-3 py-2 rounded-lg text-gray-400">Monitoreo</button>
+                <button onclick="switchClienteTab('activos', this)" class="cliente-tab-btn px-3 py-2 rounded-lg text-gray-400">Activos / Preventivo</button>
+                <button onclick="switchClienteTab('historialCliente', this)" class="cliente-tab-btn px-3 py-2 rounded-lg text-gray-400">Historial / Métricas</button>
+            </div>
+
+            <div id="cliente-solicitudes" class="mt-4">
+                <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl p-6">
+                    <h3 class="text-lg font-bold text-white mb-3">Crear nueva solicitud</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input id="clientNombre" placeholder="Nombre del equipo" class="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white" />
+                        <input id="clientTipo" placeholder="Tipo (Preventivo/Correctivo)" class="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white" />
+                        <input id="clientMarca" placeholder="Marca" class="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white" />
+                        <input id="clientSerie" placeholder="Número de serie" class="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white" />
+                        <textarea id="clientFalla" placeholder="Descripción de la falla" class="md:col-span-2 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white"></textarea>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="crearSolicitudCliente()" class="px-4 py-2 bg-blue-600 text-white rounded-xl">Enviar Solicitud</button>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <h3 class="text-lg font-bold text-white mb-3">Mis solicitudes</h3>
+                    <div id="clienteMisOrdenes" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        @foreach($misEquipos ?? collect([]) as $me)
+                        <div id="mis-eq-{{ $me->id }}" data-id="eq-{{ $me->id }}" data-nombre="{{ $me->nombre }}" data-tipo="{{ $me->tipo }}" data-marca="{{ $me->marca }}" data-serie="{{ $me->serie }}" data-estado="{{ $me->estado }}" data-falla="{{ $me->falla }}" data-telefono="{{ $me->telefono }}" data-responsable="{{ $me->user->name ?? $me->responsable ?? 'N/A' }}" data-user-id="{{ $me->user->id ?? '' }}" class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-4">
+                            <div>
+                                <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+                                    <div class="flex flex-col">
+                                        <span class="text-xs font-mono font-bold text-blue-400 bg-gray-950 px-3 py-1 rounded-lg border border-gray-800">OT-{{ str_pad($me->id,3,'0',STR_PAD_LEFT) }}</span>
+                                        <span class="text-xs text-gray-400 mt-1">Cliente: <strong class="text-white">{{ optional($me->cliente)->name ?? 'N/A' }}</strong></span>
+                                    </div>
+                                    <div class="flex flex-col items-end">
+                                        <span class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-yellow-950/80 text-yellow-400 border border-yellow-900 rounded-full flex items-center gap-1.5">Estado: <strong id="status-{{ $me->id }}">{{ $me->estado }}</strong></span>
+                                        <span class="text-xs text-gray-400 mt-1">Responsable: <strong class="text-white">{{ $me->user->name ?? $me->responsable ?? 'N/A' }}</strong></span>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4">
+                                    <h3 class="text-xl font-bold text-white">{{ $me->nombre }}</h3>
+                                    <p class="text-xs text-gray-400 font-mono mt-0.5">S/N: {{ $me->serie ?? 'N/A' }} | Marca: {{ $me->marca ?? 'N/A' }}</p>
+                                </div>
+                            </div>
+
+                            <div class="pt-4 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div class="text-xs font-mono text-gray-400 flex items-center gap-1.5 bg-gray-900/60 px-3 py-1.5 rounded-lg border border-gray-700/50">
+                                    <i class="far fa-clock text-blue-500"></i> Asignado: <strong class="text-blue-400 font-bold">{{ $me->created_at->diffForHumans() }}</strong>
+                                </div>
+                                <button onclick="verDetalles(this.closest('[data-id]'))" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2">Ver Ficha</button>
+                            </div>
+                            @if($me->comentarios && $me->comentarios->count())
+                            <div class="mt-3 card-comments space-y-2 text-sm text-gray-300">
+                                @foreach($me->comentarios as $c)
+                                <div class="bg-gray-900 p-2 rounded-lg border border-gray-800 text-xs">
+                                    <div class="font-semibold text-white">{{ $c->user->name ?? 'Anónimo' }}</div>
+                                    <div class="text-gray-400">{{ $c->comentario }}</div>
+                                    <div class="text-gray-500 text-[10px] mt-1">{{ $c->created_at->format('Y-m-d H:i') }}</div>
+                                </div>
+                                @endforeach
+                            </div>
+                            @endif
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            <div id="cliente-monitoreo" class="mt-4 hidden">
+                <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                    <h3 class="text-lg font-bold text-white mb-3">Monitoreo y Trazabilidad</h3>
+                    <p class="text-gray-400">Visualiza el flujo de trabajo en tiempo real. (Vista preliminar)</p>
+                    <!-- Aquí se puede integrar websockets / polling para estado en tiempo real -->
+                </div>
+            </div>
+
+            <div id="cliente-activos" class="mt-4 hidden">
+                <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                    <h3 class="text-lg font-bold text-white mb-3">Control de Activos y Preventivo</h3>
+                    <p class="text-gray-400">Lista de activos, calendarios de mantenimiento preventivo y alertas programadas.</p>
+                    <!-- placeholder: tabla de activos -->
+                </div>
+            </div>
+
+            <div id="cliente-historial" class="mt-4 hidden">
+                <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                    <h3 class="text-lg font-bold text-white mb-3">Historial, Métricas y Cierre de Servicio</h3>
+                    <p class="text-gray-400">Historial de intervenciones, métricas por OT y opción para cerrar o valorar el servicio.</p>
+                    <!-- placeholder: métricas y opciones de cierre -->
+                </div>
+            </div>
+
+        </div>
+        @endif
 
         <div id="tecnicos" class="tab-content space-y-6">
             <div>
@@ -560,6 +678,7 @@
                                         <select id="role-select-dashboard-{{ $u->id }}" class="text-xs rounded px-2 py-1 bg-gray-900 border border-gray-700 text-white">
                                             <option value="user" {{ ($u->role ?? 'user') === 'user' ? 'selected' : '' }}>user</option>
                                             <option value="admin" {{ ($u->role ?? 'user') === 'admin' ? 'selected' : '' }}>admin</option>
+                                            <option value="client" {{ ($u->role ?? 'user') === 'client' ? 'selected' : '' }}>client</option>
                                         </select>
                                         <button onclick="setRoleDashboard({{ $u->id }})" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">Actualizar</button>
                                     </div>
@@ -578,6 +697,7 @@
 
     <script>
         const baseBitacoras = {!! $bitacorasJson ?? '{}' !!};
+        const baseComentarios = {!! $comentariosJson ?? '{}' !!};
         const usersList = {!! $usersJson ?? 'null' !!};
         const currentUserId = {{ auth()->check() ? auth()->id() : 'null' }};
 
@@ -586,6 +706,190 @@
             document.getElementById(tabId).classList.add('active');
             document.querySelectorAll('.tab-btn').forEach(btn => btn.className = "tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl text-gray-400 hover:bg-gray-900 hover:text-white transition");
             buttonElement.className = "tab-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl bg-blue-600 text-white transition";
+            // si abrimos el panel cliente, activar su pestaña por defecto
+            if (tabId === 'cliente') {
+                const firstClienteBtn = document.querySelector('.cliente-tab-btn');
+                if (firstClienteBtn) switchClienteTab('solicitudes', firstClienteBtn);
+            }
+        }
+
+        // Navegación interna del Panel Cliente
+        function switchClienteTab(tabId, btn) {
+            // ocultar todas las secciones cliente
+            ['cliente-solicitudes','cliente-monitoreo','cliente-activos','cliente-historial'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            // mostrar la solicitada
+            const target = document.getElementById('cliente-' + (tabId === 'historialCliente' ? 'historial' : tabId));
+            if (target) target.classList.remove('hidden');
+
+            // ajustar estilos de botones
+            document.querySelectorAll('.cliente-tab-btn').forEach(b => { b.classList.remove('bg-blue-600'); b.classList.add('text-gray-400'); });
+            if (btn) { btn.classList.add('bg-blue-600'); btn.classList.remove('text-gray-400'); }
+            // ejecutar render según pestaña
+            if (tabId === 'monitoreo') renderMonitoreo();
+            if (tabId === 'activos') renderActivos();
+            if (tabId === 'historialCliente') renderHistorial();
+        }
+
+        // Renderizado y lógica mínima para las secciones cliente
+        let _monitoreoInterval = null;
+        function renderMonitoreo() {
+            const container = document.getElementById('cliente-monitoreo');
+            if (!container) return;
+            const listId = 'cliente-monitoreo-list';
+            let list = document.getElementById(listId);
+            if (!list) {
+                list = document.createElement('div');
+                list.id = listId;
+                list.className = 'space-y-3 mt-4';
+                container.appendChild(list);
+            }
+            // limpiar
+            list.innerHTML = '';
+            // construir lista a partir de las tarjetas de 'Mis solicitudes'
+            const cards = document.querySelectorAll('#clienteMisOrdenes [data-id]');
+            if (!cards || cards.length === 0) {
+                list.innerHTML = '<div class="text-gray-400">No hay solicitudes para monitorear.</div>';
+                return;
+            }
+            cards.forEach(c => {
+                const id = c.getAttribute('data-id');
+                const nombre = c.getAttribute('data-nombre');
+                const estadoEl = c.querySelector('[id^="status-"]');
+                const estado = estadoEl ? estadoEl.innerText : (c.getAttribute('data-estado') || 'N/A');
+                const row = document.createElement('div');
+                row.className = 'bg-gray-900 border border-gray-800 p-3 rounded-lg flex items-center justify-between';
+                row.innerHTML = `<div><div class="font-bold text-white">${nombre}</div><div class="text-xs text-gray-400">${id}</div></div><div class="text-sm"><span class="px-3 py-1 rounded-full bg-yellow-950 text-yellow-400 border border-yellow-900">${estado}</span></div>`;
+                list.appendChild(row);
+            });
+
+            // limpiar intervalo previo
+            if (_monitoreoInterval) clearInterval(_monitoreoInterval);
+            // simular polling para refrescar estados cada 7s (lee estado desde DOM)
+            _monitoreoInterval = setInterval(() => {
+                document.querySelectorAll('#cliente-monitoreo-list [id^="status-"]');
+            }, 7000);
+        }
+
+        function renderActivos() {
+            const container = document.getElementById('cliente-activos');
+            if (!container) return;
+            let tbl = document.getElementById('cliente-activos-table');
+            if (!tbl) {
+                tbl = document.createElement('div');
+                tbl.id = 'cliente-activos-table';
+                tbl.className = 'mt-4 overflow-x-auto';
+                tbl.innerHTML = `
+                    <table class="w-full text-left border-collapse text-sm text-gray-300">
+                        <thead><tr class="text-xs text-gray-400 uppercase"><th class="p-3">Activo</th><th class="p-3">S/N</th><th class="p-3">Estado</th><th class="p-3">Próximo Preventivo</th><th class="p-3 text-right">Acciones</th></tr></thead>
+                        <tbody id="cliente-activos-body"></tbody>
+                    </table>
+                `;
+                container.appendChild(tbl);
+            }
+            const body = document.getElementById('cliente-activos-body');
+            body.innerHTML = '';
+            // poblar desde las tarjetas
+            document.querySelectorAll('#clienteMisOrdenes [data-id]').forEach(c => {
+                const nombre = c.getAttribute('data-nombre');
+                const serie = c.getAttribute('data-serie') || 'N/A';
+                const estadoEl = c.querySelector('[id^="status-"]');
+                const estado = estadoEl ? estadoEl.innerText : (c.getAttribute('data-estado') || 'N/A');
+                const rawId = c.getAttribute('data-id') || '';
+                const idMatch = rawId.match(/eq-(\d+)/);
+                const idNum = idMatch ? idMatch[1] : rawId;
+                const clave = `preventivo_${idNum}`;
+                const prox = localStorage.getItem(clave) || 'No programado';
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-800';
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-white">${nombre}</td>
+                    <td class="p-3 font-mono text-gray-400">${serie}</td>
+                    <td class="p-3"><span class="text-xs px-2 py-1 rounded-full bg-gray-900 border border-gray-700">${estado}</span></td>
+                    <td class="p-3"><input type="date" data-id="${idNum}" value="${prox === 'No programado' ? '' : prox}" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white" /></td>
+                    <td class="p-3 text-right"><button data-id="${idNum}" class="px-3 py-1 bg-blue-600 text-white rounded" onclick="guardarPreventivo(this)">Guardar</button></td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function guardarPreventivo(btn) {
+            const id = btn.getAttribute('data-id');
+            const input = document.querySelector(`#cliente-activos-body input[data-id='${id}']`);
+            if (!input) return alert('No existe el input.');
+            const val = input.value;
+            const clave = `preventivo_${id}`;
+            if (!val) {
+                localStorage.removeItem(clave);
+                alert('Preventivo eliminado.');
+            } else {
+                localStorage.setItem(clave, val);
+                alert('Preventivo guardado: ' + val);
+            }
+            // refrescar
+            renderActivos();
+        }
+
+        function renderHistorial() {
+            const container = document.getElementById('cliente-historial');
+            if (!container) return;
+            let metrics = document.getElementById('cliente-hist-metrics');
+            if (!metrics) {
+                metrics = document.createElement('div');
+                metrics.id = 'cliente-hist-metrics';
+                metrics.className = 'grid grid-cols-3 gap-4 mt-4';
+                container.appendChild(metrics);
+            }
+            // calcular métricas desde tarjetas
+            const cards = document.querySelectorAll('#clienteMisOrdenes [data-id]');
+            const total = cards.length;
+            let ejecutadas = 0; let arreglados = 0; let tiempoBanco = 0;
+            cards.forEach(c => {
+                const estadoEl = c.querySelector('[id^="status-"]');
+                const estado = estadoEl ? estadoEl.innerText : (c.getAttribute('data-estado') || 'En espera');
+                if (estado === 'Arreglado' || estado === 'Terminado') arreglados++;
+                ejecutadas += (estado === 'Terminado') ? 1 : 0;
+            });
+            const tasa = total === 0 ? 0 : Math.round((arreglados / total) * 100);
+            metrics.innerHTML = `
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center"><div class="text-xl font-black text-blue-600">${ejecutadas}</div><div class="text-[10px] text-gray-600 mt-0.5">OTs Ejecutadas</div></div>
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center"><div class="text-xl font-black text-green-600">${tasa}%</div><div class="text-[10px] text-gray-600 mt-0.5">Tasa de Cierre</div></div>
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center"><div class="text-xl font-black text-purple-600">${Math.round(tiempoBanco)}</div><div class="text-[10px] text-gray-600 mt-0.5">Tiempo en Banco</div></div>
+            `;
+
+            // tabla de historial simple
+            let tabla = document.getElementById('cliente-hist-tabla');
+            if (!tabla) {
+                tabla = document.createElement('div');
+                tabla.id = 'cliente-hist-tabla';
+                tabla.className = 'mt-4 overflow-x-auto';
+                tabla.innerHTML = `
+                    <table class="w-full text-left border-collapse text-sm text-gray-300">
+                        <thead><tr class="text-xs text-gray-400 uppercase"><th class="p-3">Nombre</th><th class="p-3">S/N</th><th class="p-3">Estado</th><th class="p-3">Acción</th></tr></thead>
+                        <tbody id="cliente-hist-body"></tbody>
+                    </table>
+                `;
+                container.appendChild(tabla);
+            }
+            const body = document.getElementById('cliente-hist-body');
+            body.innerHTML = '';
+            document.querySelectorAll('#clienteMisOrdenes [data-id]').forEach(c => {
+                const nombre = c.getAttribute('data-nombre');
+                const serie = c.getAttribute('data-serie') || 'N/A';
+                const estadoEl = c.querySelector('[id^="status-"]');
+                const estado = estadoEl ? estadoEl.innerText : (c.getAttribute('data-estado') || 'N/A');
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-800';
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-white">${nombre}</td>
+                    <td class="p-3 font-mono text-gray-400">${serie}</td>
+                    <td class="p-3"><span class="text-xs px-2 py-1 rounded-full bg-gray-900 border border-gray-700">${estado}</span></td>
+                    <td class="p-3 text-right"><button class="px-3 py-1 bg-gray-700 text-white rounded" onclick="verBitacora('${c.getAttribute('data-id')}')">Ver Bitácora</button></td>
+                `;
+                body.appendChild(tr);
+            });
         }
 
         function openEquiposFromAlert() {
@@ -643,6 +947,7 @@
                 nuevaTarjeta.setAttribute('data-telefono', eq.telefono || '');
                 nuevaTarjeta.setAttribute('data-responsable', eq.responsable || 'N/A');
                 nuevaTarjeta.setAttribute('data-user-id', eq.user && eq.user.id ? eq.user.id : '');
+                nuevaTarjeta.setAttribute('data-cliente', (eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A'));
 
                 nuevaTarjeta.innerHTML = `
                     <div>
@@ -666,6 +971,9 @@
                         <p class="text-xs text-gray-400 font-mono mt-0.5">S/N: ${eq.serie || 'N/A'} | Marca: ${eq.marca || 'N/A'}</p>
                         <div class="mt-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700/50 flex items-center gap-2 text-xs text-gray-400">
                             <i class="fas fa-user text-blue-500"></i> <span>Responsable: <strong>${eq.responsable || 'Ing. Carlos Mendoza'}</strong></span>
+                        </div>
+                        <div class="mt-2 bg-gray-900/40 p-2 rounded-lg border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
+                            <i class="fas fa-user-circle text-indigo-400"></i> <span>Cliente: <strong>${(eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A')}</strong></span>
                         </div>
                         <div class="mt-2 bg-gray-900/40 p-2 rounded-lg border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
                             <i class="fas fa-phone text-blue-500"></i> <span>Contacto: <strong>${eq.telefono || 'N/A'}</strong></span>
@@ -702,6 +1010,91 @@
             });
         }
 
+        // Crear solicitud desde el Panel Cliente
+        function crearSolicitudCliente() {
+            const nombre = document.getElementById('clientNombre').value;
+            const tipo = document.getElementById('clientTipo').value || 'Correctivo';
+            const marca = document.getElementById('clientMarca').value || null;
+            const serie = document.getElementById('clientSerie').value || null;
+            const falla = document.getElementById('clientFalla').value || null;
+
+            if (!nombre || nombre.trim() === '') return alert('Ingresa el nombre del equipo.');
+
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            fetch('/equipos', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
+                body: JSON.stringify({ nombre, tipo, marca, serie, falla })
+            }).then(r => {
+                if (!r.ok) throw new Error('Error al crear solicitud');
+                return r.json();
+            }).then(data => {
+                const eq = data.equipo;
+                const nuevoId = `eq-${eq.id}`;
+
+                const cont = document.getElementById('clienteMisOrdenes');
+                if (cont) {
+                    const card = document.createElement('div');
+                    card.className = "bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-4";
+                    card.id = `mis-eq-${eq.id}`;
+                    card.setAttribute('data-id', nuevoId);
+                    card.setAttribute('data-nombre', eq.nombre);
+                    card.setAttribute('data-cliente', (eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A'));
+                    card.innerHTML = `
+                        <div>
+                            <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+                                <span class="text-xs font-mono font-bold text-blue-400 bg-gray-950 px-3 py-1 rounded-lg border border-gray-800">OT-#${String(eq.id).padStart(3,'0')}</span>
+                                <span class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-yellow-950/80 text-yellow-400 border border-yellow-900 rounded-full flex items-center gap-1.5">Estado: <strong id=\"status-${eq.id}\">${eq.estado || 'En espera'}</strong></span>
+                            </div>
+                                <div class="mt-4">
+                                <h3 class="text-xl font-bold text-white">${eq.nombre}</h3>
+                                <p class="text-xs text-gray-400 font-mono mt-0.5">S/N: ${eq.serie || 'N/A'} | Marca: ${eq.marca || 'N/A'}</p>
+                                <p class="text-xs text-gray-400 mt-2">Cliente: <strong class="text-white">${(eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A')}</strong></p>
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div class="text-xs font-mono text-gray-400 flex items-center gap-1.5 bg-gray-900/60 px-3 py-1.5 rounded-lg border border-gray-700/50">
+                                <i class="far fa-clock text-blue-500"></i> Asignado: <strong class="text-blue-400 font-bold">Ahora</strong>
+                            </div>
+                            <button onclick="verDetalles(this.closest('[data-id]'))" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2">Ver Ficha</button>
+                        </div>
+                    `;
+                    cont.prepend(card);
+                }
+
+                // actualizar historial local
+                try {
+                    const tabla = document.getElementById('tablaHistorialBody');
+                    if (tabla) {
+                        const tr = document.createElement('tr');
+                        tr.id = `hist-${nuevoId}`;
+                        tr.setAttribute('data-hist-nombre', eq.nombre);
+                        tr.setAttribute('data-hist-serie', eq.serie || 'N/A');
+                        tr.innerHTML = `
+                            <td class="p-4 font-bold text-white">${eq.nombre}</td>
+                            <td class="p-4 font-mono text-gray-400">${eq.serie || 'N/A'}</td>
+                            <td class="p-4 text-center"><span class="bg-blue-950 text-blue-400 border border-blue-800 text-xs px-2.5 py-0.5 rounded-full font-bold">1 Vez</span></td>
+                            <td class="p-4 text-right"><button onclick="verBitacora('${nuevoId}')" class="bg-gray-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">Ver Bitácora</button></td>
+                        `;
+                        tabla.prepend(tr);
+                    }
+                } catch(e) { console.error(e); }
+
+                // limpiar formulario
+                document.getElementById('clientNombre').value = '';
+                document.getElementById('clientTipo').value = '';
+                document.getElementById('clientMarca').value = '';
+                document.getElementById('clientSerie').value = '';
+                document.getElementById('clientFalla').value = '';
+
+                alert('Solicitud enviada correctamente.');
+            }).catch(err => {
+                console.error(err);
+                alert('No se pudo crear la solicitud.');
+            });
+        }
+
         const modalDetail = document.getElementById('modalDetail');
         const modalPanel = document.getElementById('modalPanel');
         function verDetalles(el) {
@@ -714,6 +1107,7 @@
             const otEl = el.querySelector('.font-mono');
             document.getElementById('detOT').innerText = otEl ? otEl.innerText.replace('OT: ', '') : '---';
             document.getElementById('detResponsable').innerText = el.getAttribute('data-responsable') || (el.getAttribute('data-responsable') === '' ? '---' : '---');
+            document.getElementById('detCliente').innerText = el.getAttribute('data-cliente') || '---';
             // store equipo id on modal for later actions
             const rawId = el.getAttribute('data-id') || '';
             const idMatch = rawId.match(/eq-(\d+)/);
@@ -732,13 +1126,7 @@
                 const currentUserId = el.getAttribute('data-user-id') || '';
                 if (currentUserId) sel.value = currentUserId;
             }
-            // set modal estado select to current estado if present
-            const estadoSel = document.getElementById('modalEstadoSelect');
-            if (estadoSel) {
-                const currentEstado = el.getAttribute('data-estado') || 'En espera';
-                // try to set, otherwise leave default
-                try { estadoSel.value = currentEstado; } catch(e) { /* ignore */ }
-            }
+            // el estado se muestra en la ficha pero sólo se actualiza desde las tarjetas
             // show overlay then slide panel in
             modalDetail.classList.remove('hidden');
             // allow next tick for transition
@@ -765,16 +1153,111 @@
         // close on ESC
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { if (!modalDetail.classList.contains('hidden')) closeDetailModal(); } });
 
+        // swipe down to close (touch devices)
+        (function(){
+            let touchStartY = 0;
+            let touchCurrentY = 0;
+            const threshold = 100; // px to consider swipe
+            if (modalPanel) {
+                modalPanel.addEventListener('touchstart', function(ev){ if (ev.touches && ev.touches[0]) touchStartY = ev.touches[0].clientY; }, {passive:true});
+                modalPanel.addEventListener('touchmove', function(ev){ if (ev.touches && ev.touches[0]) touchCurrentY = ev.touches[0].clientY; }, {passive:true});
+                modalPanel.addEventListener('touchend', function(ev){
+                    const delta = touchCurrentY - touchStartY;
+                    if (delta > threshold) {
+                        closeDetailModal();
+                    }
+                    touchStartY = 0; touchCurrentY = 0;
+                }, {passive:true});
+            }
+        })();
+
+        // Modal comentario elements and handlers
+        const modalComentario = document.getElementById('modalComentario');
+        let comentarioEquipoId = null;
+        function openComentario(el) {
+            if (!el) return alert('Elemento no encontrado.');
+            const nombre = el.getAttribute('data-nombre') || '---';
+            document.getElementById('comentEquipoNombre').innerText = nombre;
+            comentarioEquipoId = el.getAttribute('data-id') || '';
+            if (modalComentario) modalComentario.classList.remove('hidden');
+        }
+        function closeComentarioModal() {
+            if (modalComentario) modalComentario.classList.add('hidden');
+            const ta = document.getElementById('comentarioTexto'); if (ta) ta.value = '';
+            comentarioEquipoId = null;
+        }
+        function submitComentario() {
+            const ta = document.getElementById('comentarioTexto'); if (!ta) return alert('Textarea no encontrado');
+            const texto = ta.value.trim(); if (!texto) return alert('Escribe un comentario antes de enviar.');
+            const rawId = comentarioEquipoId || '';
+            const m = rawId.match(/eq-(\d+)/);
+            const eqId = m ? m[1] : rawId;
+            const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = tokenMeta ? tokenMeta.getAttribute('content') : '';
+            // intentar enviar al servidor; si falla, guardar en localStorage
+            fetch(`/equipos/${eqId}/comentarios`, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
+                body: JSON.stringify({ comentario: texto })
+            }).then(r => {
+                if (!r.ok) throw new Error('Error en servidor');
+                return r.json();
+            }).then(data => {
+                const autor = (data.comentario && data.comentario.autor) ? data.comentario.autor : (data.usuario_nombre || 'Tú');
+                const textoServer = (data.comentario && data.comentario.texto) ? data.comentario.texto : texto;
+                appendCommentToCard(rawId, textoServer, autor);
+                alert('Comentario enviado.');
+                closeComentarioModal();
+            }).catch(err => {
+                const key = `comentarios_${eqId}`;
+                const prev = JSON.parse(localStorage.getItem(key) || '[]');
+                prev.push({ texto, fecha: new Date().toISOString(), autor: 'Tú (offline)' });
+                localStorage.setItem(key, JSON.stringify(prev));
+                appendCommentToCard(rawId, texto, 'Tú (offline)');
+                alert('No fue posible enviar al servidor. Comentario guardado localmente.');
+                closeComentarioModal();
+            });
+        }
+        function appendCommentToCard(cardId, texto, autor) {
+            const sel = document.querySelector(`[data-id='${cardId}']`);
+            if (!sel) return;
+            let commentsContainer = sel.querySelector('.card-comments');
+            if (!commentsContainer) {
+                commentsContainer = document.createElement('div');
+                commentsContainer.className = 'mt-3 card-comments space-y-2 text-sm text-gray-300';
+                sel.appendChild(commentsContainer);
+            }
+            const div = document.createElement('div');
+            div.className = 'bg-gray-900 p-2 rounded-lg border border-gray-800 text-xs';
+            div.innerHTML = `<div class="font-semibold text-white">${autor}</div><div class="text-gray-400">${texto}</div><div class="text-gray-500 text-[10px] mt-1">${new Date().toLocaleString()}</div>`;
+            commentsContainer.prepend(div);
+            // también actualizar baseComentarios para que modal/historial lo muestre sin recargar
+            try {
+                if (typeof baseComentarios !== 'undefined') {
+                    if (!baseComentarios[cardId]) baseComentarios[cardId] = [];
+                    baseComentarios[cardId].unshift({ fecha: new Date().toLocaleString(), autor: autor, texto: texto });
+                }
+            } catch(e) { console.error(e); }
+        }
+
         const modalBitacora = document.getElementById('modalBitacora');
         const timeline = document.getElementById('timelineContenedor');
         function verBitacora(id) {
             const f = document.getElementById(`hist-${id}`);
             document.getElementById('bitacoraEquipoNombre').innerText = f.getAttribute('data-hist-nombre');
             timeline.innerHTML = "";
+            // bitácoras históricas
             (baseBitacoras[id] || []).forEach(item => {
                 const p = document.createElement('div');
                 p.className = "relative pl-6 border-l border-gray-700 ml-2";
                 p.innerHTML = `<span class="absolute -left-[5px] top-1.5 bg-blue-500 w-2 h-2 rounded-full"></span><div class="bg-gray-950 p-3 rounded-lg text-xs"><span class="text-blue-400 font-mono"><i class="far fa-clock text-[10px] mr-1"></i>${item.fecha} (OT: ${item.ot})</span><h5 class="text-white font-bold mt-1">${item.tarea}</h5><p class="text-gray-400 italic mt-0.5">${item.detalle}</p></div>`;
+                timeline.appendChild(p);
+            });
+            // comentarios relacionados
+            (baseComentarios[id] || []).forEach(item => {
+                const p = document.createElement('div');
+                p.className = "relative pl-6 border-l border-gray-700 ml-2";
+                p.innerHTML = `<span class="absolute -left-[5px] top-1.5 bg-indigo-500 w-2 h-2 rounded-full"></span><div class="bg-gray-900 p-3 rounded-lg text-xs"><span class="text-indigo-300 font-mono"><i class="far fa-comment text-[10px] mr-1"></i>${item.fecha}</span><h5 class="text-white font-bold mt-1">Comentario de ${item.autor}</h5><p class="text-gray-400 italic mt-0.5">${item.texto}</p></div>`;
                 timeline.appendChild(p);
             });
             modalBitacora.classList.remove('hidden');
@@ -824,8 +1307,15 @@
                 method: 'POST',
                 headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
                 body: JSON.stringify({ role })
-            }).then(r => {
-                if (!r.ok) throw new Error('No autorizado');
+            }).then(async r => {
+                if (!r.ok) {
+                    let text = '';
+                    try { text = await r.text(); } catch(_) { text = '' }
+                    console.error('Error response', r.status, text);
+                    let msg = 'No se pudo actualizar el rol';
+                    try { const j = JSON.parse(text); if (j && j.message) msg = j.message; } catch(_) {}
+                    throw new Error(`${r.status} - ${msg}`);
+                }
                 return r.json();
             }).then(data => {
                 const row = document.getElementById(`user-${userId}`);
@@ -834,7 +1324,7 @@
                     roleCell.innerText = data.user.role || role;
                 }
                 alert('Rol actualizado');
-            }).catch(e => { console.error(e); alert('No se pudo actualizar el rol'); });
+            }).catch(e => { console.error(e); alert(e.message || 'No se pudo actualizar el rol'); });
         }
 
         function cambiarEstadoCard(equipoId, nuevoEstado, el) {
@@ -856,14 +1346,41 @@
                     cards.forEach(card => {
                         card.setAttribute('data-estado', data.equipo.estado);
                         // actualizar select interno si lo tiene
-                        const sel = card.querySelector('select');
-                        if (sel) sel.value = data.equipo.estado;
+                        const sel = card.querySelector('select.cardEstadoSelect');
+                            if (sel) {
+                            sel.value = data.equipo.estado;
+                            // mantener el select visible con la nueva opción seleccionada
+                            sel.style.display = '';
+                            const statusElLocal = card.querySelector(`#status-${equipoId}`);
+                            if (statusElLocal) {
+                                statusElLocal.innerText = data.equipo.estado;
+                                const statusContainer = statusElLocal.parentNode;
+                                // mantener el select siempre visible; el usuario abre el desplegable manualmente
+                                statusContainer.style.cursor = 'default';
+                                // reemplazar otros nodos que contengan texto 'Estado:' para evitar duplicados
+                                const possible = card.querySelectorAll('span,div,p');
+                                possible.forEach(n => {
+                                    if (n === statusElLocal || n === statusContainer) return;
+                                    // no tocar elementos que contienen selects u otros hijos (evita destruir el <select>)
+                                    if (n.querySelector && n.querySelector('select')) return;
+                                    if (n.innerText && /Estado\s*:/i.test(n.innerText)) {
+                                        try {
+                                            n.innerHTML = n.innerHTML.replace(/Estado\s*:\s*([^<]*)/i, `Estado: <strong id="status-${equipoId}">${data.equipo.estado}</strong>`);
+                                        } catch(err) {
+                                            n.innerText = `Estado: ${data.equipo.estado}`;
+                                        }
+                                    }
+                                });
+                            }
+                        }
                         // actualizar badge/estado por id si existe
                         const statusEl = document.getElementById(`status-${equipoId}`);
                         if (statusEl) statusEl.innerText = data.equipo.estado;
-                        // actualizar posibles textos que contienen 'Estado:'
+                        // actualizar posibles textos que contienen 'Estado:' en otros nodos
                         const nodes = card.querySelectorAll('span,div');
                         nodes.forEach(n => {
+                            // solo actualizar nodos sin hijos para no eliminar elementos como <select>
+                            if (n.children && n.children.length > 0) return;
                             if (n.innerText && /estado\s*:/i.test(n.innerText)) {
                                 n.innerText = n.innerText.replace(/Estado\s*:\s*.*/i, `Estado: ${data.equipo.estado}`);
                             }
@@ -871,10 +1388,9 @@
                     });
                 } catch(e) { console.error(e); }
 
-                // actualizar panel si está abierto y es el mismo equipo
+                // actualizar panel si está abierto y es el mismo equipo (solo mostrar estado)
                 if (modalDetail && modalDetail.dataset && String(modalDetail.dataset.equipoId) == String(equipoId)) {
-                    const estadoSel = document.getElementById('modalEstadoSelect');
-                    if (estadoSel) estadoSel.value = data.equipo.estado;
+                    // el panel mostrará el nuevo estado a través de las tarjetas vinculadas; no hay control editable aquí
                 }
 
                 // actualizar Mis Órdenes (si existe la card en Mis Órdenes)
@@ -908,20 +1424,40 @@
                     }
                 } catch(e) { console.error(e); }
 
-                // sincronizar Arreglados: añadir o eliminar fila
+                // sincronizar Arreglados: añadir o eliminar fila (más robusto)
                 try {
+                    function estadoEsArreglado(estado) {
+                        if (!estado) return false;
+                        const s = String(estado).toLowerCase();
+                        return s.includes('arreg') || s.includes('repar') || s.includes('term') || s.includes('complet');
+                    }
+
                     const tbody = document.getElementById('arregladosBody');
                     if (tbody) {
                         const existingRow = document.getElementById(`arreglados-row-${equipoId}`);
-                        if (data.equipo.estado && data.equipo.estado.toLowerCase().includes('arreg')) {
-                            if (!existingRow) {
+                        const shouldBeInArreglados = estadoEsArreglado(data.equipo.estado);
+
+                        if (shouldBeInArreglados) {
+                            // si ya existe, actualizar columnas
+                            if (existingRow) {
+                                try {
+                                    const cols = existingRow.querySelectorAll('td');
+                                    if (cols[0]) cols[0].innerText = data.equipo.nombre || cols[0].innerText;
+                                    if (cols[1]) cols[1].innerText = data.equipo.serie ?? 'N/A';
+                                    if (cols[2]) cols[2].innerText = data.equipo.marca ?? 'N/A';
+                                    if (cols[3]) cols[3].innerText = data.equipo.user ? data.equipo.user.name : (data.equipo.responsable ?? 'N/A');
+                                    if (cols[4]) cols[4].innerText = data.equipo.telefono ?? 'N/A';
+                                    if (cols[5]) cols[5].innerText = 'Ahora';
+                                } catch(_) { /* ignore individual update errors */ }
+                            } else {
                                 const tr = document.createElement('tr');
                                 tr.id = `arreglados-row-${equipoId}`;
+                                tr.className = '';
                                 tr.innerHTML = `
-                                    <td class="p-4 font-bold text-white">${data.equipo.nombre}</td>
+                                    <td class="p-4 font-bold text-white">${data.equipo.nombre ?? '---'}</td>
                                     <td class="p-4 font-mono text-gray-400">${data.equipo.serie ?? 'N/A'}</td>
                                     <td class="p-4">${data.equipo.marca ?? 'N/A'}</td>
-                                    <td class="p-4">${data.equipo.user ? data.equipo.user.name : data.equipo.responsable ?? 'N/A'}</td>
+                                    <td class="p-4">${data.equipo.user ? data.equipo.user.name : (data.equipo.responsable ?? 'N/A')}</td>
                                     <td class="p-4">${data.equipo.telefono ?? 'N/A'}</td>
                                     <td class="p-4 text-right">Ahora</td>
                                 `;
@@ -946,81 +1482,7 @@
             }).catch(e => { console.error(e); alert('No se pudo actualizar el estado'); });
         }
 
-        function cambiarEstadoDesdeModal(nuevoEstado) {
-            const equipoId = modalDetail.dataset.equipoId;
-            if (!equipoId) return alert('Equipo no identificado');
-            if (!confirm('Confirmar cambio de estado?')) return;
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const comentario = document.getElementById('modalComentario') ? document.getElementById('modalComentario').value : '';
-            fetch(`/equipos/${equipoId}/estado`, {
-                method: 'POST',
-                headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
-                body: JSON.stringify({ estado: nuevoEstado, comentario })
-            }).then(r => {
-                if (!r.ok) throw new Error('Error al actualizar');
-                return r.json();
-            }).then(data => {
-                // actualizar modal
-                document.getElementById('detFalla').innerText = document.getElementById('detFalla').innerText; // no-op to keep field
-                document.getElementById('modalEstadoSelect').value = data.equipo.estado;
-                // actualizar todas las tarjetas que correspondan a este equipo
-                try {
-                    const cards = document.querySelectorAll(`[data-id='eq-${equipoId}']`);
-                    cards.forEach(card => {
-                        card.setAttribute('data-estado', data.equipo.estado);
-                        const sel = card.querySelector('select');
-                        if (sel) sel.value = data.equipo.estado;
-                        const statusEl = document.getElementById(`status-${equipoId}`);
-                        if (statusEl) statusEl.innerText = data.equipo.estado;
-                        const nodes = card.querySelectorAll('span,div');
-                        nodes.forEach(n => {
-                            if (n.innerText && /estado\s*:/i.test(n.innerText)) {
-                                n.innerText = n.innerText.replace(/Estado\s*:\s*.*/i, `Estado: ${data.equipo.estado}`);
-                            }
-                        });
-                    });
-                } catch(e) { console.error(e); }
-
-                // sincronizar Arreglados: si estado es Arreglado -> añadir; si ya no es -> eliminar
-                try {
-                    const tbody = document.getElementById('arregladosBody');
-                    if (!tbody) return;
-                    const existingRow = document.getElementById(`arreglados-row-${equipoId}`);
-                    if (data.equipo.estado && data.equipo.estado.toLowerCase().includes('arreg')) {
-                        if (!existingRow) {
-                            const tr = document.createElement('tr');
-                            tr.id = `arreglados-row-${equipoId}`;
-                            tr.innerHTML = `
-                                <td class="p-4 font-bold text-white">${data.equipo.nombre}</td>
-                                <td class="p-4 font-mono text-gray-400">${data.equipo.serie ?? 'N/A'}</td>
-                                <td class="p-4">${data.equipo.marca ?? 'N/A'}</td>
-                                <td class="p-4">${data.equipo.user ? data.equipo.user.name : data.equipo.responsable ?? 'N/A'}</td>
-                                <td class="p-4">${data.equipo.telefono ?? 'N/A'}</td>
-                                <td class="p-4 text-right">Ahora</td>
-                            `;
-                            tbody.prepend(tr);
-                        }
-                    } else {
-                        if (existingRow) existingRow.remove();
-                    }
-                } catch(e) { console.error(e); }
-
-                // agregar la bitácora recibida al cache local para que aparezca en verBitacora
-                try {
-                    const key = `eq-${equipoId}`;
-                    baseBitacoras[key] = baseBitacoras[key] || [];
-                    if (data.bitacora) {
-                        baseBitacoras[key].unshift({ fecha: data.bitacora.fecha, ot: data.bitacora.ot, tarea: data.bitacora.tarea, detalle: data.bitacora.detalle });
-                        // si el modal de bitacora está abierto, refrescar su contenido
-                        if (!modalBitacora.classList.contains('hidden')) {
-                            verBitacora(equipoId);
-                        }
-                    }
-                } catch(e) { console.error(e); }
-
-                alert('Estado actualizado');
-            }).catch(e => { console.error(e); alert('No se pudo actualizar el estado'); });
-        }
+        // Actualizaciones desde la modal han sido deshabilitadas: el estado solo se cambia desde las tarjetas.
 
         function reasignarEquipoDesdeModal() {
             const equipoId = modalDetail.dataset.equipoId;

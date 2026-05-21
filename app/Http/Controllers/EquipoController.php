@@ -11,7 +11,7 @@ class EquipoController extends Controller
 {
     public function index()
     {
-        $equipos = Equipo::with(['bitacoras','user'])->orderByDesc('created_at')->get();
+        $equipos = Equipo::with(['bitacoras','user','cliente','comentarios.user'])->orderByDesc('created_at')->get();
 
         $bitacoras = [];
         foreach ($equipos as $e) {
@@ -41,6 +41,20 @@ class EquipoController extends Controller
             'bitacorasJson' => json_encode($bitacoras),
         ];
 
+        // preparar comentarios como JSON por equipo (clave: eq-{id})
+        $comentariosMap = [];
+        foreach ($equipos as $e) {
+            $key = 'eq-' . $e->id;
+            $comentariosMap[$key] = $e->comentarios->map(function ($c) {
+                return [
+                    'fecha' => $c->created_at ? $c->created_at->format('d M, Y H:i') : null,
+                    'autor' => $c->user ? $c->user->name : 'Anónimo',
+                    'texto' => $c->comentario,
+                ];
+            })->toArray();
+        }
+        $data['comentariosJson'] = json_encode($comentariosMap);
+
         // Si el usuario es admin, pasar lista de usuarios para reasignaciones y gestión
         if (auth()->check() && auth()->user()->isAdmin()) {
             $users = User::select('id','name','email')->orderBy('name')->get();
@@ -50,7 +64,7 @@ class EquipoController extends Controller
 
         // Equipos asignados al usuario actual (Mis Órdenes)
         if (auth()->check()) {
-            $mis = Equipo::where('user_id', auth()->id())->orderByDesc('created_at')->get();
+            $mis = Equipo::with(['comentarios.user','cliente'])->where('user_id', auth()->id())->orderByDesc('created_at')->get();
             $data['misEquipos'] = $mis;
         }
 
@@ -64,7 +78,7 @@ class EquipoController extends Controller
         $data['staleDays'] = $staleDays;
 
         // Equipos con estado que indica reparación/terminado (variantes)
-        $arreglados = Equipo::with('user')
+        $arreglados = Equipo::with(['user','cliente'])
             ->where(function ($q) {
                 $q->whereRaw("LOWER(estado) LIKE ?", ['%arreg%'])
                   ->orWhereRaw("LOWER(estado) LIKE ?", ['%repar%'])
@@ -149,7 +163,7 @@ class EquipoController extends Controller
             'telefono' => 'nullable|string|max:50',
         ]);
 
-        $equipo = Equipo::create(array_merge($data, ['estado' => 'Asignado', 'user_id' => auth()->id(), 'responsable' => auth()->user()->name ?? null]));
+        $equipo = Equipo::create(array_merge($data, ['estado' => 'Asignado', 'user_id' => auth()->id(), 'responsable' => auth()->user()->name ?? null, 'cliente_id' => auth()->id()]));
 
         $bitacora = Bitacora::create([
             'equipo_id' => $equipo->id,
@@ -158,8 +172,35 @@ class EquipoController extends Controller
             'detalle' => $equipo->falla,
         ]);
 
-        $equipo->load('bitacoras','user');
+        $equipo->load('bitacoras','user','cliente');
 
         return response()->json(['equipo' => $equipo, 'bitacoras' => $equipo->bitacoras], 201);
+    }
+
+    // Guardar comentario enviado desde UI
+    public function storeComentario(Request $request, Equipo $equipo)
+    {
+        $user = $request->user();
+        $data = $request->validate([
+            'comentario' => 'required|string|max:2000',
+        ]);
+
+        $coment = \App\Models\Comentario::create([
+            'equipo_id' => $equipo->id,
+            'user_id' => $user ? $user->id : null,
+            'comentario' => $data['comentario'],
+        ]);
+
+        $coment->load('user');
+
+        return response()->json([
+            'message' => 'Comentario guardado',
+            'comentario' => [
+                'id' => $coment->id,
+                'texto' => $coment->comentario,
+                'autor' => $coment->user ? $coment->user->name : ($user ? $user->name : 'Anónimo'),
+                'created_at' => $coment->created_at->toDateTimeString(),
+            ]
+        ], 201);
     }
 }

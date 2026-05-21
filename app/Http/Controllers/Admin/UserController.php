@@ -31,8 +31,19 @@ class UserController extends Controller
         }
 
         $data = $request->validate(['role' => 'required|string']);
-        $user->role = $data['role'];
-        $user->save();
+
+        // roles permitidos
+        $allowed = ['user', 'admin', 'client'];
+        if (!in_array($data['role'], $allowed, true)) {
+            return response()->json(['message' => 'Rol inválido', 'allowed' => $allowed], 422);
+        }
+
+        try {
+            $user->role = $data['role'];
+            $user->save();
+        } catch (\Exception $ex) {
+            return response()->json(['message' => 'Error al guardar rol', 'error' => $ex->getMessage()], 500);
+        }
 
         return response()->json(['message' => 'Role actualizado', 'user' => $user]);
     }
