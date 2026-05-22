@@ -53,13 +53,13 @@
         .px-2\.5.py-0\.5[class*="bg-red-"] {
             background: #fee2e2 !important; /* pale red */
             border-color: #fecaca !important;
-            color: #0f172a !important; /* dark text for readability */
+            color: #4f618c !important; /* dark text for readability */
             font-weight: 700;
         }
         .px-2\.5.py-0\.5[class*="bg-green-"] {
             background: #ecfdf5 !important; /* pale green */
             border-color: #bbf7d0 !important;
-            color: #064e3b !important; /* dark green text */
+            color: #739d92 !important; /* dark green text */
             font-weight: 700;
         }
         .px-2\.5.py-0\.5[class*="bg-yellow-"] {
@@ -263,18 +263,43 @@
                         <p class="text-xs text-gray-400 font-mono mt-0.5">S/N: {{ $equipo->serie ?? 'N/A' }} | Marca: {{ $equipo->marca ?? 'N/A' }}</p>
                         <div class="mt-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700/50 flex items-center gap-2 text-xs text-gray-400">
                             <i class="fas fa-user text-blue-500"></i>
-                            <span>Responsable: <strong>{{ $equipo->user->name ?? $equipo->responsable ?? 'Ing. Carlos Mendoza' }}</strong></span>
+                            <span>Responsable: <strong>{{ $equipo->user->name ?? ($equipo->responsable ?: 'Sin asignar') }}</strong></span>
                         </div>
                         <div class="mt-2 bg-gray-900/40 p-2 rounded-lg border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
                             <i class="fas fa-user-circle text-indigo-400"></i>
                             <span>Cliente: <strong>{{ optional($equipo->cliente)->name ?? 'N/A' }}</strong></span>
                         </div>
                     </div>
-                    <div class="mt-5 pt-3 border-t border-gray-700 text-xs text-gray-500 flex justify-between items-center">
-                        <span><i class="far fa-calendar mr-1"></i> Asignado: {{ $equipo->created_at->diffForHumans() }}</span>
-                        <button onclick="verDetalles(this.closest('[data-id]'))" class="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 transition">
-                            Ver detalles <i class="fas fa-chevron-right text-[10px]"></i>
-                        </button>
+                    <div class="mt-5 pt-3 border-t border-gray-700">
+                        <div class="text-xs text-gray-500 flex justify-between items-center mb-3">
+                            <span><i class="far fa-calendar mr-1"></i> Asignado: {{ $equipo->created_at->diffForHumans() }}</span>
+                            <button onclick="verDetalles(this.closest('[data-id]'))" class="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 transition">
+                                Ver detalles <i class="fas fa-chevron-right text-[10px]"></i>
+                            </button>
+                        </div>
+                        @if(auth()->user()->isAdmin())
+                        <div class="flex gap-2 card-action-buttons">
+                            @if($equipo->estado === 'En espera')
+                            <button onclick="aceptarOrden({{ $equipo->id }}, '{{ $equipo->nombre }}')" class="flex-1 px-2 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1">
+                                <i class="fas fa-check text-xs"></i> Aceptar
+                            </button>
+                            <button onclick="rechazarOrden({{ $equipo->id }}, '{{ $equipo->nombre }}')" class="flex-1 px-2 py-1.5 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1">
+                                <i class="fas fa-undo text-xs"></i> Rechazar
+                            </button>
+                            @elseif(preg_match('/(Arreg|Termin)/i', $equipo->estado ?? ''))
+                            <button onclick="rechazarOrden({{ $equipo->id }}, '{{ $equipo->nombre }}')" class="flex-1 px-2 py-1.5 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1">
+                                <i class="fas fa-undo text-xs"></i> Rechazar
+                            </button>
+                            <button onclick="eliminarOrden({{ $equipo->id }}, '{{ $equipo->nombre }}')" class="flex-1 px-2 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1">
+                                <i class="fas fa-trash text-xs"></i> Eliminar
+                            </button>
+                            @else
+                            <button onclick="rechazarOrden({{ $equipo->id }}, '{{ $equipo->nombre }}')" class="flex-1 px-2 py-1.5 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1">
+                                <i class="fas fa-undo text-xs"></i> Rechazar
+                            </button>
+                            @endif
+                        </div>
+                        @endif
                     </div>
                 </div>
                 @endforeach
@@ -485,8 +510,8 @@
 
         <div id="arreglados" class="tab-content space-y-6">
             <div>
-                <h1 class="text-3xl font-extrabold text-white">Equipos Arreglados</h1>
-                <p class="text-gray-400 text-sm mt-1">Listado de equipos marcados como arreglados/terminados. Visible solo para administradores.</p>
+                <h1 class="text-3xl font-extrabold text-white">Equipos Terminados / Arreglados</h1>
+                <p class="text-gray-400 text-sm mt-1">Vista de referencia de equipos completados. Para rechazar o eliminar órdenes, ve a "Equipos en Taller" y usa los botones en las tarjetas.</p>
             </div>
 
             <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
@@ -498,18 +523,18 @@
                             <th class="p-4">Marca</th>
                             <th class="p-4">Responsable Técnico</th>
                             <th class="p-4">Teléfono Contacto</th>
-                            <th class="p-4 text-right">Última actualización</th>
+                            <th class="p-4 text-center">Última actualización</th>
                         </tr>
                     </thead>
                     <tbody id="arregladosBody" class="divide-y divide-gray-700 text-sm text-gray-300">
                         @foreach($arreglados ?? collect([]) as $a)
-                        <tr>
+                        <tr id="arr-eq-{{ $a->id }}">
                             <td class="p-4 font-bold text-white">{{ $a->nombre }}</td>
                             <td class="p-4 font-mono text-gray-400">{{ $a->serie ?? 'N/A' }}</td>
                             <td class="p-4">{{ $a->marca ?? 'N/A' }}</td>
-                            <td class="p-4">{{ $a->user->name ?? $a->responsable ?? 'N/A' }}</td>
+                            <td class="p-4">{{ $a->user->name ?? ($a->responsable ?: 'Sin asignar') }}</td>
                             <td class="p-4">{{ $a->telefono ?? 'N/A' }}</td>
-                            <td class="p-4 text-right">{{ $a->updated_at->diffForHumans() }}</td>
+                            <td class="p-4 text-center text-xs text-gray-500">{{ $a->updated_at->diffForHumans() }}</td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -650,11 +675,26 @@
 
         <div id="tecnicos" class="tab-content space-y-6">
             <div>
-                <h1 class="text-3xl font-extrabold text-white">Técnicos / Cuentas</h1>
-                <p class="text-gray-400 text-sm mt-1">Listado de todas las cuentas registradas y su rol actual. Sólo accesible por administradores.</p>
+                <h1 class="text-3xl font-extrabold text-white">Configuración de Roles y Cuentas</h1>
+                <p class="text-gray-400 text-sm mt-1">Gestiona todos los usuarios del sistema y asigna sus roles. Roles disponibles: <span class="font-mono text-white">admin</span> (administrador técnico), <span class="font-mono text-white">user</span> (técnico), <span class="font-mono text-white">client</span> (cliente).</p>
             </div>
 
-            @php $users = \App\Models\User::orderBy('name')->get(); @endphp
+            @php $allUsers = \App\Models\User::orderBy('name')->get(); @endphp
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-blue-900/30 border border-blue-700 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-blue-400">{{ \App\Models\User::where('role', 'admin')->count() }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Administradores</div>
+                </div>
+                <div class="bg-green-900/30 border border-green-700 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-green-400">{{ \App\Models\User::where('role', 'user')->count() }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Técnicos</div>
+                </div>
+                <div class="bg-purple-900/30 border border-purple-700 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-purple-400">{{ \App\Models\User::where('role', 'client')->count() }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Clientes</div>
+                </div>
+            </div>
 
             <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
                 <table class="w-full text-left border-collapse">
@@ -662,28 +702,34 @@
                         <tr class="border-b border-gray-700 bg-gray-850 text-gray-400 text-xs font-semibold uppercase tracking-wider">
                             <th class="p-4">Nombre</th>
                             <th class="p-4">Correo</th>
-                            <th class="p-4">Rol</th>
+                            <th class="p-4">Rol Actual</th>
                             <th class="p-4 text-right">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-700 text-sm text-gray-300">
-                        @foreach($users as $u)
-                        <tr id="user-{{ $u->id }}">
+                        @foreach($allUsers as $u)
+                        <tr id="user-{{ $u->id }}" class="hover:bg-gray-900/40 transition">
                             <td class="p-4 font-bold text-white">{{ $u->name }}</td>
                             <td class="p-4 font-mono text-gray-400">{{ $u->email }}</td>
-                            <td class="p-4" data-role>{{ $u->role ?? 'user' }}</td>
+                            <td class="p-4" data-role>
+                                <span class="px-2 py-1 rounded text-xs font-semibold
+                                    {{ ($u->role ?? 'user') === 'admin' ? 'bg-blue-950 text-blue-400 border border-blue-800' : '' }}
+                                    {{ ($u->role ?? 'user') === 'user' ? 'bg-green-950 text-green-400 border border-green-800' : '' }}
+                                    {{ ($u->role ?? 'user') === 'client' ? 'bg-purple-950 text-purple-400 border border-purple-800' : '' }}
+                                ">{{ $u->role ?? 'user' }}</span>
+                            </td>
                             <td class="p-4 text-right">
                                 @if(auth()->user()->id !== $u->id)
                                     <div class="flex items-center justify-end gap-2">
                                         <select id="role-select-dashboard-{{ $u->id }}" class="text-xs rounded px-2 py-1 bg-gray-900 border border-gray-700 text-white">
-                                            <option value="user" {{ ($u->role ?? 'user') === 'user' ? 'selected' : '' }}>user</option>
-                                            <option value="admin" {{ ($u->role ?? 'user') === 'admin' ? 'selected' : '' }}>admin</option>
-                                            <option value="client" {{ ($u->role ?? 'user') === 'client' ? 'selected' : '' }}>client</option>
+                                            <option value="user" {{ ($u->role ?? 'user') === 'user' ? 'selected' : '' }}>user (Técnico)</option>
+                                            <option value="admin" {{ ($u->role ?? 'user') === 'admin' ? 'selected' : '' }}>admin (Administrador)</option>
+                                            <option value="client" {{ ($u->role ?? 'user') === 'client' ? 'selected' : '' }}>client (Cliente)</option>
                                         </select>
-                                        <button onclick="setRoleDashboard({{ $u->id }})" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">Actualizar</button>
+                                        <button onclick="setRoleDashboard({{ $u->id }})" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">Cambiar</button>
                                     </div>
                                 @else
-                                    <span class="text-gray-500 text-xs italic">(Cuenta propia)</span>
+                                    <span class="text-gray-500 text-xs italic">(Tu cuenta)</span>
                                 @endif
                             </td>
                         </tr>
@@ -700,6 +746,36 @@
         const baseComentarios = {!! $comentariosJson ?? '{}' !!};
         const usersList = {!! $usersJson ?? 'null' !!};
         const currentUserId = {{ auth()->check() ? auth()->id() : 'null' }};
+        const currentUserIsAdmin = {{ auth()->check() && auth()->user()->isAdmin() ? 'true' : 'false' }};
+
+        function getActionButtonsHtml(eq) {
+            const estado = (eq.estado || 'En espera').toString();
+            const nombre = eq.nombre || 'Equipo';
+            const id = eq.id;
+            const aceptarBtn = `<button onclick="aceptarOrden(${id}, ${JSON.stringify(nombre)})" class="flex-1 px-2 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1"><i class="fas fa-check text-xs"></i> Aceptar</button>`;
+            const rechazarBtn = `<button onclick="rechazarOrden(${id}, ${JSON.stringify(nombre)})" class="flex-1 px-2 py-1.5 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1"><i class="fas fa-undo text-xs"></i> Rechazar</button>`;
+            const eliminarBtn = `<button onclick="eliminarOrden(${id}, ${JSON.stringify(nombre)})" class="flex-1 px-2 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition font-medium flex items-center justify-center gap-1"><i class="fas fa-trash text-xs"></i> Eliminar</button>`;
+
+            if (estado === 'En espera') {
+                return `${aceptarBtn}${rechazarBtn}`;
+            }
+            if (/(Arreg|Termin)/i.test(estado)) {
+                return `${rechazarBtn}${eliminarBtn}`;
+            }
+            return rechazarBtn;
+        }
+
+        function updateCardActionButtons(card, estado, equipoId, equipoNombre) {
+            if (!card) return;
+            const actions = card.querySelector('.card-action-buttons');
+            if (!actions) return;
+            if (!currentUserIsAdmin) {
+                actions.innerHTML = '';
+                return;
+            }
+            const eq = { id: equipoId, nombre: equipoNombre, estado };
+            actions.innerHTML = getActionButtonsHtml(eq);
+        }
 
         function switchTab(tabId, buttonElement) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -947,7 +1023,7 @@
                 nuevaTarjeta.setAttribute('data-telefono', eq.telefono || '');
                 nuevaTarjeta.setAttribute('data-responsable', eq.responsable || 'N/A');
                 nuevaTarjeta.setAttribute('data-user-id', eq.user && eq.user.id ? eq.user.id : '');
-                nuevaTarjeta.setAttribute('data-cliente', (eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A'));
+                nuevaTarjeta.setAttribute('data-cliente', (eq.cliente && eq.cliente.name) ? eq.cliente.name : 'N/A');
 
                 nuevaTarjeta.innerHTML = `
                     <div>
@@ -970,10 +1046,10 @@
                         </div>
                         <p class="text-xs text-gray-400 font-mono mt-0.5">S/N: ${eq.serie || 'N/A'} | Marca: ${eq.marca || 'N/A'}</p>
                         <div class="mt-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700/50 flex items-center gap-2 text-xs text-gray-400">
-                            <i class="fas fa-user text-blue-500"></i> <span>Responsable: <strong>${eq.responsable || 'Ing. Carlos Mendoza'}</strong></span>
+                            <i class="fas fa-user text-blue-500"></i> <span>Responsable: <strong>${eq.responsable || 'Sin asignar'}</strong></span>
                         </div>
                         <div class="mt-2 bg-gray-900/40 p-2 rounded-lg border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
-                            <i class="fas fa-user-circle text-indigo-400"></i> <span>Cliente: <strong>${(eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A')}</strong></span>
+                            <i class="fas fa-user-circle text-indigo-400"></i> <span>Cliente: <strong>${(eq.cliente && eq.cliente.name) ? eq.cliente.name : 'N/A'}</strong></span>
                         </div>
                         <div class="mt-2 bg-gray-900/40 p-2 rounded-lg border border-gray-700/50 text-xs text-gray-400 flex items-center gap-2">
                             <i class="fas fa-phone text-blue-500"></i> <span>Contacto: <strong>${eq.telefono || 'N/A'}</strong></span>
@@ -985,6 +1061,7 @@
                             Ver detalles <i class="fas fa-chevron-right text-[10px]"></i>
                         </button>
                     </div>
+                    ${currentUserIsAdmin ? `<div class="flex gap-2 card-action-buttons">${getActionButtonsHtml(eq)}</div>` : ''}
                 `;
                 listaEquipos.prepend(nuevaTarjeta);
 
@@ -1040,7 +1117,7 @@
                     card.id = `mis-eq-${eq.id}`;
                     card.setAttribute('data-id', nuevoId);
                     card.setAttribute('data-nombre', eq.nombre);
-                    card.setAttribute('data-cliente', (eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A'));
+                    card.setAttribute('data-cliente', (eq.cliente && eq.cliente.name) ? eq.cliente.name : 'N/A');
                     card.innerHTML = `
                         <div>
                             <div class="flex justify-between items-center border-b border-gray-700 pb-3">
@@ -1050,7 +1127,7 @@
                                 <div class="mt-4">
                                 <h3 class="text-xl font-bold text-white">${eq.nombre}</h3>
                                 <p class="text-xs text-gray-400 font-mono mt-0.5">S/N: ${eq.serie || 'N/A'} | Marca: ${eq.marca || 'N/A'}</p>
-                                <p class="text-xs text-gray-400 mt-2">Cliente: <strong class="text-white">${(eq.cliente && eq.cliente.name) ? eq.cliente.name : (eq.user && eq.user.name ? eq.user.name : 'N/A')}</strong></p>
+                                <p class="text-xs text-gray-400 mt-2">Cliente: <strong class="text-white">${(eq.cliente && eq.cliente.name) ? eq.cliente.name : 'N/A'}</strong></p>
                             </div>
                         </div>
                         <div class="pt-4 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1385,6 +1462,7 @@
                                 n.innerText = n.innerText.replace(/Estado\s*:\s*.*/i, `Estado: ${data.equipo.estado}`);
                             }
                         });
+                        updateCardActionButtons(card, data.equipo.estado, equipoId, data.equipo.nombre || `#${equipoId}`);
                     });
                 } catch(e) { console.error(e); }
 
@@ -1539,6 +1617,78 @@
                 } catch(e) { console.error(e); }
                 alert('Reasignación realizada');
             }).catch(e => { console.error(e); alert('No se pudo reasignar'); });
+        }
+
+        function eliminarOrden(equipoId, equipoNombre) {
+            if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente la orden "${equipoNombre}"? Esta acción no se puede deshacer.`)) return;
+            
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            fetch(`/equipos/${equipoId}`, {
+                method: 'DELETE',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
+            }).then(r => {
+                if (!r.ok) throw new Error('Error al eliminar');
+                return r.json();
+            }).then(data => {
+                // Remover la fila de la tabla
+                const row = document.getElementById(`arr-eq-${equipoId}`);
+                if (row) row.remove();
+                
+                // Remover de otras listas si existe
+                const card = document.querySelector(`[data-id='eq-${equipoId}']`);
+                if (card) card.remove();
+                
+                alert(data.message || 'Orden eliminada correctamente');
+            }).catch(e => { console.error(e); alert(e.message || 'No se pudo eliminar la orden'); });
+        }
+
+        function aceptarOrden(equipoId, equipoNombre) {
+            if (!confirm(`¿Deseas aceptar la orden "${equipoNombre}"? Pasará a "En proceso".`)) return;
+
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            fetch(`/equipos/${equipoId}/estado`, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
+                body: JSON.stringify({ estado: 'En proceso', comentario: 'Orden aceptada por administrador' })
+            }).then(r => {
+                if (!r.ok) throw new Error('Error al aceptar');
+                return r.json();
+            }).then(data => {
+                const card = document.querySelector(`[data-id='eq-${equipoId}']`);
+                if (card) {
+                    const statusEl = card.querySelector(`#status-${equipoId}`);
+                    if (statusEl) statusEl.innerText = data.equipo.estado;
+                    updateCardActionButtons(card, data.equipo.estado, equipoId, equipoNombre);
+                }
+                alert('Orden aceptada y movida a "En proceso"');
+            }).catch(e => { console.error(e); alert(e.message || 'No se pudo aceptar la orden'); });
+        }
+
+        function rechazarOrden(equipoId, equipoNombre) {
+            if (!confirm(`¿Deseas rechazar la orden "${equipoNombre}"? Volverá a estado "En espera".`)) return;
+            
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            fetch(`/equipos/${equipoId}/estado`, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN': token, 'Accept': 'application/json'},
+                body: JSON.stringify({ estado: 'En espera', comentario: 'Orden rechazada por administrador' })
+            }).then(r => {
+                if (!r.ok) throw new Error('Error al rechazar');
+                return r.json();
+            }).then(data => {
+                // Remover de la tabla de arreglados
+                const row = document.getElementById(`arr-eq-${equipoId}`);
+                if (row) row.remove();
+                
+                const card = document.querySelector(`[data-id='eq-${equipoId}']`);
+                if (card) {
+                    const statusEl = card.querySelector(`#status-${equipoId}`);
+                    if (statusEl) statusEl.innerText = data.equipo.estado;
+                    updateCardActionButtons(card, data.equipo.estado, equipoId, equipoNombre);
+                }
+                
+                alert('Orden rechazada y devuelta a "En espera"');
+            }).catch(e => { console.error(e); alert(e.message || 'No se pudo rechazar la orden'); });
         }
     </script>
 </body>

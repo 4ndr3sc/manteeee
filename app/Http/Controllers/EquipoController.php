@@ -55,9 +55,9 @@ class EquipoController extends Controller
         }
         $data['comentariosJson'] = json_encode($comentariosMap);
 
-        // Si el usuario es admin, pasar lista de usuarios para reasignaciones y gestión
+        // Si el usuario es admin, pasar lista de técnicos (admin Y user) para reasignaciones y gestión
         if (auth()->check() && auth()->user()->isAdmin()) {
-            $users = User::select('id','name','email')->orderBy('name')->get();
+            $users = User::whereIn('role', ['admin', 'user'])->select('id','name','email')->orderBy('name')->get();
             $data['usersJson'] = json_encode($users);
             $data['usersList'] = $users;
         }
@@ -154,6 +154,7 @@ class EquipoController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
         $data = $request->validate([
             'nombre' => 'required|string|max:255',
             'tipo' => 'nullable|string|max:100',
@@ -163,7 +164,20 @@ class EquipoController extends Controller
             'telefono' => 'nullable|string|max:50',
         ]);
 
-        $equipo = Equipo::create(array_merge($data, ['estado' => 'Asignado', 'user_id' => auth()->id(), 'responsable' => auth()->user()->name ?? null, 'cliente_id' => auth()->id()]));
+        // Si el usuario es cliente, no asignar técnico (dejar sin asignar)
+        // Si es técnico (admin o user), asignarle a él
+        $isClient = $user && $user->hasRole('client');
+        $userId = $isClient ? null : auth()->id();
+        $responsable = $isClient ? null : (auth()->user()->name ?? null);
+        $clienteId = $isClient ? auth()->id() : null;
+        $estado = $isClient ? 'En espera' : 'Asignado';
+
+        $equipo = Equipo::create(array_merge($data, [
+            'estado' => $estado, 
+            'user_id' => $userId, 
+            'responsable' => $responsable,
+            'cliente_id' => $clienteId
+        ]));
 
         $bitacora = Bitacora::create([
             'equipo_id' => $equipo->id,
@@ -178,6 +192,30 @@ class EquipoController extends Controller
     }
 
     // Guardar comentario enviado desde UI
+    public function destroy(Request $request, Equipo $equipo)
+    {
+        $user = $request->user();
+        if (!$user || !$user->isAdmin()) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
+        // Eliminar comentarios asociados
+        \App\Models\Comentario::where('equipo_id', $equipo->id)->delete();
+        
+        // Eliminar bitácoras asociadas
+        Bitacora::where('equipo_id', $equipo->id)->delete();
+        
+        // Eliminar el equipo
+        $equipoId = $equipo->id;
+        $equipoNombre = $equipo->nombre;
+        $equipo->delete();
+
+        return response()->json([
+            'message' => "Equipo '{$equipoNombre}' eliminado correctamente",
+            'equipoId' => $equipoId,
+        ]);
+    }
+
     public function storeComentario(Request $request, Equipo $equipo)
     {
         $user = $request->user();
